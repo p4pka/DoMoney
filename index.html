@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Бизнес Кликер</title>
+    <script src="https://telegram.org"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--tg-theme-bg-color, #1c1c1e);
+            color: var(--tg-theme-text-color, #ffffff);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            user-select: none;
+        }
+        .stats {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .balance {
+            font-size: 36px;
+            font-weight: bold;
+            color: #4cd964;
+        }
+        .income {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+        .click-btn {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #ffcc00, #ff9500);
+            border: none;
+            font-size: 48px;
+            box-shadow: 0 8px 20px rgba(255, 149, 0, 0.4);
+            cursor: pointer;
+            transition: transform 0.08s;
+            margin-bottom: 25px;
+        }
+        .click-btn:active {
+            transform: scale(0.92);
+        }
+        .shop {
+            width: 100%;
+            max-width: 400px;
+        }
+        .shop h3 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+        }
+        .biz-card {
+            background-color: var(--tg-theme-secondary-bg-color, #2c2c2e);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .biz-info h4 {
+            margin: 0 0 4px 0;
+            font-size: 16px;
+        }
+        .biz-info p {
+            margin: 0;
+            font-size: 13px;
+            opacity: 0.7;
+        }
+        .buy-btn {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .buy-btn:disabled {
+            background-color: #555;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="stats">
+        <div class="balance">$<span id="balance">0</span></div>
+        <div class="income">Пассивный доход: $<span id="income">0</span> / сек</div>
+    </div>
+
+    <button class="click-btn" id="tapBtn">💵</button>
+
+    <div class="shop">
+        <h3>Магазин бизнесов</h3>
+        <div id="bizList"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Начальные данные игры
+        let state = JSON.parse(localStorage.getItem('bizGameSave')) || {
+            balance: 0,
+            clickPower: 1,
+            businesses: [
+                { id: 0, name: "🍋 Лимонадный киоск", baseCost: 15, income: 1, count: 0 },
+                { id: 1, name: "☕ Кофейня у дома", baseCost: 100, income: 8, count: 0 },
+                { id: 2, name: "🍔 Бургерная", baseCost: 600, income: 45, count: 0 },
+                { id: 3, name: "🏢 IT-компания", baseCost: 3500, income: 260, count: 0 }
+            ]
+        };
+
+        function getCost(biz) {
+            return Math.floor(biz.baseCost * Math.pow(1.15, biz.count));
+        }
+
+        function getTotalIncome() {
+            return state.businesses.reduce((sum, b) => sum + (b.income * b.count), 0);
+        }
+
+        function saveGame() {
+            localStorage.setItem('bizGameSave', JSON.stringify(state));
+        }
+
+        function render() {
+            document.getElementById('balance').innerText = Math.floor(state.balance);
+            document.getElementById('income').innerText = getTotalIncome();
+
+            const list = document.getElementById('bizList');
+            list.innerHTML = '';
+
+            state.businesses.forEach(biz => {
+                const cost = getCost(biz);
+                const card = document.createElement('div');
+                card.className = 'biz-card';
+                card.innerHTML = `
+                    <div class="biz-info">
+                        <h4>${biz.name} (${biz.count})</h4>
+                        <p>+$${biz.income}/сек</p>
+                    </div>
+                    <button class="buy-btn" onclick="buyBiz(${biz.id})" ${state.balance < cost ? 'disabled' : ''}>
+                        $${cost}
+                    </button>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        document.getElementById('tapBtn').addEventListener('click', () => {
+            state.balance += state.clickPower;
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            render();
+        });
+
+        window.buyBiz = function(id) {
+            const biz = state.businesses.find(b => b.id === id);
+            const cost = getCost(biz);
+            if (state.balance >= cost) {
+                state.balance -= cost;
+                biz.count += 1;
+                if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+                saveGame();
+                render();
+            }
+        };
+
+        // Начисление пассивного дохода каждую секунду
+        setInterval(() => {
+            const inc = getTotalIncome();
+            if (inc > 0) {
+                state.balance += inc;
+                saveGame();
+                render();
+            }
+        }, 1000);
+
+        render();
+    </script>
+</body>
+</html>
